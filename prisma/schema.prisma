@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRED
+}
+
+enum TenderRequirementStatus {
+  FOUND
+  EXPIRING
+  MISSING
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  companies    Company[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Company {
+  id               String            @id @default(cuid())
+  ownerId          String
+  name             String
+  legalForm        String
+  taxId            String?
+  registrationCode String?
+  address          String?
+  bankDetails      String?
+  directorName     String?
+  directorPosition String?
+  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  documents        CompanyDocument[]
+  tenders          Tender[]
+  generatedDocs    GeneratedDocument[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([ownerId])
+}
+
+model CompanyDocument {
+  id              String         @id @default(cuid())
+  companyId       String
+  title           String
+  category        String
+  fileName        String
+  mimeType        String
+  storageProvider String
+  storageKey      String
+  validUntil      DateTime?
+  status          DocumentStatus @default(ACTIVE)
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([companyId])
+}
+
+model Tender {
+  id               String              @id @default(cuid())
+  companyId        String
+  title            String
+  sourceType       String
+  sourceText       String?
+  sourceFileName   String?
+  requirements     TenderRequirement[]
+  generatedDocs    GeneratedDocument[]
+  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([companyId])
+}
+
+model TenderRequirement {
+  id             String                  @id @default(cuid())
+  tenderId       String
+  title          String
+  details        String?
+  requiredForm   String?
+  expiresInDays  Int?
+  status         TenderRequirementStatus @default(MISSING)
+  tender         Tender                  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([tenderId])
+}
+
+model GeneratedDocument {
+  id              String   @id @default(cuid())
+  companyId       String
+  tenderId        String?
+  title           String
+  type            String
+  storageProvider String
+  storageKey      String
+  generatedBy     String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tender          Tender?  @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([tenderId])
+}
