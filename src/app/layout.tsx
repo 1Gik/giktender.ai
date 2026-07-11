@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "GikTender AI",
-  description: "Платформа для автоматизации подготовки тендерных документов",
+  description: "Платформа для підготовки тендерної документації Prozorro",
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className="h-full antialiased">
-      <body className="min-h-full bg-gray-50 text-gray-900">{children}</body>
+    <html lang="uk" className="h-full antialiased">
+      <body className="min-h-full bg-white text-gray-900">{children}</body>
     </html>
   );
 }
