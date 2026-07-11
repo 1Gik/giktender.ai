@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 const links = [
-  { href: "/companies", label: "Компании" },
-  { href: "/tenders", label: "Тендеры" },
-  { href: "/requirements", label: "Анализ требований" },
-  { href: "/generated", label: "Сгенерированные документы" },
-  { href: "/settings", label: "Настройки" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/companies", label: "Companies" },
+  { href: "/tenders", label: "Tenders" },
+  { href: "/generated", label: "Generated" },
+  { href: "/settings", label: "Subscription" },
+  { href: "/admin", label: "Admin" },
 ];
 
 export function MainNav() {
@@ -49,7 +50,7 @@ export function MainNav() {
           onClick={logout}
           className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
         >
-          Выйти
+          Logout
         </button>
       </div>
     </header>
