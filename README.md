@@ -1,133 +1,68 @@
 # giktender.ai
 
-Современное веб-приложение для автоматизации подготовки документов для участия в тендерах.
+MVP SaaS for structured Prozorro tender document preparation.
 
-## Текущий статус реализации
+## Implemented MVP modules
 
-Реализован стартовый модульный MVP:
+- Auth (register/login/logout)
+- Company profiles (isolated per user)
+- Company documents upload/validity tracking
+- Tender workflow:
+  - create tender
+  - upload source file (PDF storage) or text
+  - parse requirements (OpenAI JSON mode if configured, deterministic fallback otherwise)
+  - checklist statuses: ✅ AVAILABLE, 🤖 AUTO_GENERATABLE, ⚠ MISSING, ❌ BLOCKED
+  - generate structured dovidky/forms from templates
+  - export package summary
+- Dashboard with companies, recent tenders, and subscription state
+- Subscription logic:
+  - first tender free
+  - next tenders require active subscription
+  - usage tracking
+- Admin panel:
+  - users list
+  - manual subscription activation/deactivation
+  - usage metrics
 
-- ✅ авторизация (регистрация / вход / выход);
-- ✅ управление компаниями (создание и список компаний);
-- ✅ загрузка документов компании (с сохранением метаданных и статуса срока действия);
-- ✅ подготовленная архитектура данных и API для следующих этапов:
-  - тендеры;
-  - анализ требований;
-  - генерация документов;
-  - экспорт комплектов.
+## Stack
 
----
+- Next.js + React + TypeScript + TailwindCSS
+- PostgreSQL + Prisma
+- JWT auth cookie session
+- Local MVP file storage in `/tmp/giktender-uploads` (prepared for S3-compatible replacement)
+- OpenAI API (optional, for structured extraction)
 
-## Архитектура
+## API overview
 
-### Frontend
+- Auth: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`
+- Companies: `GET/POST /api/companies`
+- Company documents: `GET/POST /api/companies/:companyId/documents`
+- Dashboard: `GET /api/dashboard`
+- Tenders:
+  - `GET/POST /api/tenders`
+  - `POST /api/tenders/:tenderId/source`
+  - `POST /api/tenders/:tenderId/parse`
+  - `GET /api/tenders/:tenderId/checklist`
+  - `POST /api/tenders/:tenderId/generate`
+  - `GET /api/tenders/:tenderId/export`
+- Generated docs: `GET /api/generated`
+- Admin:
+  - `GET /api/admin/users`
+  - `POST /api/admin/subscriptions`
+  - `GET /api/admin/usage`
 
-- Next.js (App Router)
-- React + TypeScript
-- Tailwind CSS
-- Адаптивные страницы:
-  - `/register`
-  - `/login`
-  - `/companies`
-  - `/companies/:companyId/documents`
-  - разделы-заглушки для следующего этапа: `/tenders`, `/requirements`, `/generated`, `/settings`
-
-### Backend
-
-- Next.js Route Handlers (`src/app/api/**`)
-- JWT-сессии в `httpOnly` cookie
-- Валидация входных данных через `zod`
-- ORM: Prisma
-
-### База данных
-
-- PostgreSQL (через Prisma)
-- Схема: `prisma/schema.prisma`
-- Основные сущности:
-  - `User`
-  - `Company`
-  - `CompanyDocument`
-  - `Tender`
-  - `TenderRequirement`
-  - `GeneratedDocument`
-
-### Хранение файлов
-
-- Подготовлена модель хранения для S3/Supabase (`storageProvider`, `storageKey`)
-- В MVP используется локальное временное хранилище (`/tmp/giktender-uploads`) для загрузки документов
-
----
-
-## API (текущий этап)
-
-### Auth
-
-- `POST /api/auth/register` — регистрация
-- `POST /api/auth/login` — вход
-- `POST /api/auth/logout` — выход
-
-### Companies
-
-- `GET /api/companies` — список компаний текущего пользователя
-- `POST /api/companies` — создание компании
-
-### Company Documents
-
-- `GET /api/companies/:companyId/documents` — список документов компании
-- `POST /api/companies/:companyId/documents` — загрузка документа (multipart/form-data)
-
----
-
-## Пользовательский сценарий (реализованная часть)
-
-1. Пользователь регистрируется или входит.
-2. Создаёт профиль компании.
-3. Загружает устав/лицензии/сертификаты и другие документы.
-4. Система хранит документы в базе знаний компании и отмечает статус:
-   - `ACTIVE` — актуален;
-   - `EXPIRING` — срок скоро истекает (30 дней);
-   - `EXPIRED` — срок истёк.
-
-Следующий модуль: создание тендера и автоматический анализ требований.
-
----
-
-## Запуск
-
-1. Установите зависимости:
+## Run locally
 
 ```bash
 npm install
-```
-
-2. Создайте `.env` на основе `.env.example`:
-
-```bash
 cp .env.example .env
-```
-
-3. Укажите PostgreSQL `DATABASE_URL` и `JWT_SECRET`.
-
-4. Сгенерируйте Prisma client и примените миграции:
-
-```bash
 npm run prisma:generate
 npm run prisma:migrate:dev
-```
-
-5. Запустите приложение:
-
-```bash
 npm run dev
 ```
 
----
+Set in `.env`:
 
-## Дальнейшие модули (по ТЗ)
-
-- Анализ тендерной документации (PDF/Word/text) и извлечение требований через LLM.
-- Сопоставление требований с базой документов компании.
-- Генерация недостающих документов по шаблонам.
-- Экспорт отдельных файлов и ZIP-комплекта.
-- Полнотекстовый и векторный поиск (`pgvector`).
-- Версионность документов и история тендеров.
-- Ролевая модель и разграничение доступа.
+- `DATABASE_URL`
+- `JWT_SECRET`
+- optional: `OPENAI_API_KEY`, `OPENAI_MODEL`

@@ -7,30 +7,79 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 enum DocumentStatus {
   ACTIVE
   EXPIRING
   EXPIRED
 }
 
-enum TenderRequirementStatus {
-  FOUND
-  EXPIRING
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TenderSourceType {
+  PDF
+  TEXT
+}
+
+enum TenderParseStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum RequirementType {
+  DOCUMENT
+  CERTIFICATE
+  FORM
+  OTHER
+}
+
+enum RequirementStatus {
+  AVAILABLE
+  AUTO_GENERATABLE
   MISSING
+  BLOCKED
+}
+
+enum RequirementMatchType {
+  EXACT
+  CATEGORY
+  GENERATED
+  NONE
+}
+
+enum GeneratedDocumentType {
+  CERTIFICATE
+  FORM
+  OTHER
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  fullName     String
-  companies    Company[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String        @id @default(cuid())
+  email          String        @unique
+  passwordHash   String
+  fullName       String
+  role           UserRole      @default(USER)
+  companies      Company[]
+  subscriptions  Subscription[]
+  usageRecords   UsageRecord[]
+  createdTenders Tender[]      @relation("TenderCreator")
+  generatedDocs  GeneratedDocument[]
+  adminActions   AdminAction[] @relation("AdminActor")
+  targetActions  AdminAction[] @relation("AdminTarget")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model Company {
-  id               String            @id @default(cuid())
+  id               String              @id @default(cuid())
   ownerId          String
   name             String
   legalForm        String
@@ -40,12 +89,12 @@ model Company {
   bankDetails      String?
   directorName     String?
   directorPosition String?
-  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner            User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   documents        CompanyDocument[]
   tenders          Tender[]
   generatedDocs    GeneratedDocument[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([ownerId])
 }
@@ -62,57 +111,131 @@ model CompanyDocument {
   validUntil      DateTime?
   status          DocumentStatus @default(ACTIVE)
   company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  matchedRequirements TenderRequirement[] @relation("MatchedCompanyDocument")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([companyId])
+  @@index([category])
 }
 
 model Tender {
-  id               String              @id @default(cuid())
-  companyId        String
-  title            String
-  sourceType       String
-  sourceText       String?
-  sourceFileName   String?
-  requirements     TenderRequirement[]
-  generatedDocs    GeneratedDocument[]
-  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                 String              @id @default(cuid())
+  companyId          String
+  createdByUserId    String
+  title              String
+  sourceType         TenderSourceType
+  sourceText         String?
+  sourceFileName     String?
+  sourceStorageProvider String?
+  sourceStorageKey   String?
+  parseStatus        TenderParseStatus   @default(PENDING)
+  isFreeTender       Boolean             @default(false)
+  requirements       TenderRequirement[]
+  generatedDocs      GeneratedDocument[]
+  usageRecords       UsageRecord[]
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy          User                @relation("TenderCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([companyId])
+  @@index([createdByUserId])
 }
 
 model TenderRequirement {
-  id             String                  @id @default(cuid())
-  tenderId       String
-  title          String
-  details        String?
-  requiredForm   String?
-  expiresInDays  Int?
-  status         TenderRequirementStatus @default(MISSING)
-  tender         Tender                  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  id                      String               @id @default(cuid())
+  tenderId                String
+  key                     String
+  title                   String
+  details                 String?
+  requirementType         RequirementType      @default(DOCUMENT)
+  expectedDocumentCategory String?
+  isMandatory             Boolean              @default(true)
+  canAutoGenerate         Boolean              @default(false)
+  status                  RequirementStatus    @default(MISSING)
+  matchType               RequirementMatchType @default(NONE)
+  reasoning               String?
+  matchedCompanyDocumentId String?
+  tender                  Tender               @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  matchedCompanyDocument  CompanyDocument?     @relation("MatchedCompanyDocument", fields: [matchedCompanyDocumentId], references: [id], onDelete: SetNull)
+  generatedDocuments      GeneratedDocument[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
+  @@unique([tenderId, key])
   @@index([tenderId])
+  @@index([status])
 }
 
 model GeneratedDocument {
-  id              String   @id @default(cuid())
-  companyId       String
-  tenderId        String?
-  title           String
-  type            String
-  storageProvider String
-  storageKey      String
-  generatedBy     String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tender          Tender?  @relation(fields: [tenderId], references: [id], onDelete: SetNull)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                    String                @id @default(cuid())
+  companyId             String
+  tenderId              String
+  requirementId         String?
+  title                 String
+  type                  GeneratedDocumentType @default(OTHER)
+  templateKey           String
+  sourceRequirementText String
+  contentJson           Json
+  storageProvider       String
+  storageKey            String
+  mimeType              String
+  generatedByUserId     String
+  company               Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tender                Tender                @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  requirement           TenderRequirement?    @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  generatedBy           User                  @relation(fields: [generatedByUserId], references: [id], onDelete: Cascade)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   @@index([companyId])
   @@index([tenderId])
+  @@index([requirementId])
+  @@index([generatedByUserId])
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String
+  status             SubscriptionStatus @default(INACTIVE)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  activatedByAdminId String?
+  notes              String?
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model UsageRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  tenderId  String?
+  action    String
+  meta      Json?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender    Tender?  @relation(fields: [tenderId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenderId])
+  @@index([action])
+}
+
+model AdminAction {
+  id           String   @id @default(cuid())
+  adminUserId  String
+  targetUserId String?
+  action       String
+  details      Json?
+  adminUser    User     @relation("AdminActor", fields: [adminUserId], references: [id], onDelete: Cascade)
+  targetUser   User?    @relation("AdminTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([targetUserId])
 }
